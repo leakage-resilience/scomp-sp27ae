@@ -1,0 +1,177 @@
+require "constants.jinc"
+require "share.jinc"
+
+// only works for even N!!!!
+
+inline
+fn refresh_masks_top(
+    reg ptr u32[N] c,
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randomness,
+    inline int rnd lo width
+) -> reg ptr u32[N], inline int
+{
+    reg u32 r x;
+    if width == 2 {
+        r = randomness[rnd];
+        rnd = rnd + 1;
+        x = c[lo];
+        x ^= r;
+        c[lo] = x;
+        x = c[lo+1];
+        x ^= r;
+        c[lo+1] = x;
+    } else if width != 1 {
+        inline int i;
+        for i = 0 to width / 2 {
+            r = randomness[rnd];
+            rnd = rnd + 1;
+            x = c[lo + i];
+            x ^= r;
+            c[lo + i] = x;
+
+            x = c[lo + width / 2 + i];
+            x ^= r;
+            c[lo + width / 2 + i] = x;
+        }
+    }
+    return c, rnd;
+}
+
+inline
+fn refresh_masks_bot(
+    reg ptr u32[N] c,
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randomness,
+    inline int rnd lo width
+) -> reg ptr u32[N], inline int
+{
+    inline int i;
+    reg u32 r x;
+    for i = 0 to width / 2 {
+        r = randomness[rnd];
+        rnd = rnd + 1;
+        x = c[lo + i];
+        c[lo + i] = x;
+
+        x = c[lo + width / 2 + i];
+        c[lo + width / 2 + i] = x;
+    }
+    return c, rnd;
+}
+
+inline
+fn _g_logref2(
+    reg ptr u32[N] c a, 
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    inline int depth;
+    inline int rnd;
+    rnd = 0;
+    c = #copy(a);
+    for depth = 0 to LOG_N {
+        inline int seg_size seg_index;
+        seg_size = N / (1 << depth);
+
+        for seg_index = 0 to (1 << depth) {
+            c, rnd = refresh_masks_top(c, randomness, rnd, seg_size * seg_index, seg_size);
+        }
+        if seg_size > 2 {
+            for seg_index = 0 to (1 << depth) {
+                c, rnd = refresh_masks_bot(c, randomness, rnd, seg_size * seg_index, seg_size);
+            }
+        }
+    }
+    return c;
+}
+
+
+
+inline
+fn _g_logref(
+    reg ptr u32[N] c a, 
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    inline int depth;
+    reg u32 i hi r ri x t;
+    ri = 0;
+    c = #copy(a);
+
+    for depth = LOG_N downto 0 {
+        i = 0;
+        hi = N/(1 << depth);
+        while (i < N) {
+            x = c[i];
+            r = randomness[ri];
+            ri += 1;
+            x ^= r;
+            c[i] = x;
+            
+            t = i + (N/(1 << depth));
+            if (t >= N) {
+                t -= N;
+            }
+            x = c[t];
+            x ^= r;
+            c[t] = x;
+            i += 1;
+
+            if (i >= hi) {
+                i += N/(1 << depth);
+                hi += N/(1 << depth);
+            }
+        }
+    }
+    return c;
+}
+
+
+export
+fn lm_logref_derand (
+    reg ptr u32[N] c a, 
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    #[inline] c = _g_logref(c, a, randomness);
+    return c;
+}
+
+export
+fn lm_logref (
+    reg ptr u32[N] c a
+) -> reg ptr u32[N]
+{
+    stack u32 [LOG_REFRESH_RANDOMNESS] rand;
+    reg ptr u32 [LOG_REFRESH_RANDOMNESS] randp = rand;
+    // jasmin2ec messes up warray extraction of non-u8 #randombytes calls;
+    reg ptr u8[LOG_REFRESH_RANDOMNESS * 4] randpB;
+    randpB = randp;
+    randpB = #randombytes(randpB);
+    randp = randpB;
+    #[inline] c = _g_logref(c, a, randp);
+    return c;
+}
+
+
+/*
+
+
+depth = 0;
+while (2**depth < N) {
+    i = 0
+    hi = N/(2 ** depth)
+
+    while (i < N) {
+        r <- C
+        x[i] += r
+        x[i + N/(2 ** depth)] -= r
+        i++;
+
+        if(i >= hi) {
+            i += N/(2 ** depth);
+            hi += N/(2 ** depth);
+        }
+    }
+    depth ++
+}
+*/

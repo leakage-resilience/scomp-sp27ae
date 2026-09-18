@@ -1,0 +1,167 @@
+require "constants.jinc"
+require "gadgets.jinc"
+require "share.jinc"
+require "sha3.jinc"
+
+export
+fn lm_theta1600(
+    reg ptr At A
+) -> reg ptr At
+{
+    A = theta1600(A);
+    return A;
+}
+
+export
+fn lm_rho_pi1600(
+    reg ptr At A
+) -> reg ptr At
+{
+    A = rho_pi1600(A);
+    return A;
+}
+
+export
+fn lm_chi1600_derand(
+    reg ptr At A,
+    reg ptr u32[CHI_RANDOMNESS] rands
+) -> reg ptr At
+{
+    A = chi1600(A, rands);
+    return A;
+}
+
+export
+fn lm_iota1600(
+    reg ptr At A,
+    reg u32 round
+) -> reg ptr At
+{
+    A = iota1600(A, round);
+    return A;
+}
+
+export
+fn lm_chi1600(reg ptr At A) -> reg ptr At
+{
+    stack u32 [CHI_RANDOMNESS] rand;
+    reg ptr u32 [CHI_RANDOMNESS] randp = rand;
+    randp = #randombytes(randp);
+    A = chi1600(A, randp);
+    return A;
+}
+
+export
+fn lm_rnd1600_derand(
+    reg ptr At A,
+    reg u32 round,
+    reg ptr u32[CHI_RANDOMNESS] rands
+) -> reg ptr At
+{
+    A = rnd1600(A, round, rands);
+    return A;
+}
+
+export
+fn lm_rnd1600(
+    reg ptr At A,
+    reg u32 round
+) -> reg ptr At
+{
+    stack u32 [CHI_RANDOMNESS] rand;
+    reg ptr u32 [CHI_RANDOMNESS] randp = rand;
+    randp = #randombytes(randp);
+    A = rnd1600(A, round, randp);
+    return A;
+}
+
+export
+fn lm_keccakf1600_derand(
+    reg ptr At A,
+    reg ptr u32[KECCAKF_RANDOMNESS] rands
+) -> reg ptr At
+{
+    A = keccakf1600(A, rands);
+    return A;
+}
+
+export
+fn lm_keccakf1600(
+    reg ptr At A
+) -> reg ptr At
+{
+    A = A;
+    stack u32[KECCAKF_RANDOMNESS] rand;
+    reg ptr u32 [KECCAKF_RANDOMNESS] randp = rand;
+    randp = #randombytes(randp);
+    randp = randp; // move out of r0
+    A = keccakf1600(A, randp);
+    return A;
+}
+
+export
+fn lm_sha3_224(
+    reg ptr SHA3_224_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_224_Digest
+{
+    output = sha3_224(output, txt, len);
+    return output;
+}
+
+export
+fn lm_sha3_256(
+    reg ptr SHA3_256_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_256_Digest
+{
+    output = sha3_256(output, txt, len);
+    return output;
+}
+
+export
+fn lm_sha3_384(
+    reg ptr SHA3_384_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_384_Digest
+{
+    output = sha3_384(output, txt, len);
+    return output;
+}
+
+export
+fn lm_sha3_512(
+    reg ptr SHA3_512_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_512_Digest
+{
+    output = sha3_512(output, txt, len);
+    return output;
+}
+
+export
+fn lm_shake128(
+    reg ptr SHAKE128_Output output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHAKE128_Output
+{
+    output = shake128(output, txt, len);
+    return output;
+}
+
+export
+fn lm_shake256(
+    reg ptr SHAKE256_Output output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHAKE256_Output
+{
+    output = shake256(output, txt, len);
+    return output;
+}
+

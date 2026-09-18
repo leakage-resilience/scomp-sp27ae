@@ -1,0 +1,416 @@
+require "constants.jinc"
+require "gadgets.jinc"
+
+// Keccak-f[1600]: 5x5 state of 64-bit lanes split into two 32-bit halves per lane.
+// Lane (x,y) occupies two consecutive N-share slots in At:
+//   At[2*N*(5y+x)   : N]  -- high half (bits 32..63)
+//   At[2*N*(5y+x)+N : N]  -- low half  (bits  0..31)
+
+param int LANE_SIZE = 2 * N;
+type At = u32[5 * 5 * LANE_SIZE];
+type Hl = Share;
+type Lt = u32[LANE_SIZE];
+type Pt = u32[5 * LANE_SIZE];
+
+inline
+fn st_get_lane(
+    reg ptr At A,
+    inline int x,
+    inline int y
+) -> reg ptr Lt
+{
+    reg ptr Lt res;
+    res = A[2 * N * (5 * y + x) : 2 * N];
+    return res;
+}
+
+inline
+fn st_put_lane(
+    reg ptr At A,
+    inline int x,
+    inline int y,
+    reg ptr Lt val
+) -> reg ptr At
+{
+    A[2 * N * (5 * y + x) : LANE_SIZE] = val;
+    return A;
+}
+
+inline
+fn st_get_lane_hi(
+    reg ptr At A,
+    inline int x,
+    inline int y
+) -> reg ptr Hl
+{
+    reg ptr Hl res;
+    res = A[2 * N * (5 * y + x) : N];
+    return res;
+}
+
+inline
+fn st_get_lane_lo(
+    reg ptr At A,
+    inline int x,
+    inline int y
+) -> reg ptr Hl
+{
+    reg ptr Hl res;
+    res = A[2 * N * (5 * y + x) + N : N];
+    return res;
+}
+
+inline
+fn st_put_lane_hi(
+    reg ptr At A,
+    inline int x,
+    inline int y,
+    reg ptr Hl hi
+) -> reg ptr At
+{
+    A[2 * N * (5 * y + x) : N] = hi;
+    return A;
+}
+
+inline
+fn st_put_lane_lo(
+    reg ptr At A,
+    inline int x,
+    inline int y,
+    reg ptr Hl lo
+) -> reg ptr At
+{
+    A[2 * N * (5 * y + x) + N : N] = lo;
+    return A;
+}
+
+inline
+fn st_get_lane_lu(
+    reg ptr At A,
+    inline int x,
+    inline int y
+) -> (reg ptr Hl, reg ptr Hl)
+{
+    reg ptr Hl hi lo;
+    hi = st_get_lane_hi(A, x, y);
+    lo = st_get_lane_lo(A, x, y);
+    return (hi, lo);
+}
+
+inline
+fn st_put_lane_lu(
+    reg ptr At A,
+    inline int x,
+    inline int y,
+    reg ptr Hl hi lo
+) -> reg ptr At
+{
+    A = st_put_lane_hi(A, x, y, hi);
+    A = st_put_lane_lo(A, x, y, lo);
+    return A;
+}
+
+fn xor_lanes_inplace(
+    reg ptr Lt x,
+    reg ptr Lt y
+) -> reg ptr Lt
+{
+    reg ptr Share hx hy;
+
+    hx = x[0 : N];
+    hy = y[0 : N];
+    hx = _g_xor_inplace(hx, hy);
+    x[0 : N] = hx;
+
+    hx = x[N : N];
+    hy = y[N : N];
+    hx = _g_xor_inplace(hx, hy);
+    x[N : N] = hx;
+
+    return x;
+}
+
+fn xor_lanes(
+    reg ptr Lt res,
+    reg ptr Lt x,
+    reg ptr Lt y
+) -> reg ptr Lt
+{
+    reg ptr Share hx hy hr;
+
+    hx = x[0 : N];
+    hy = y[0 : N];
+    hr = res[0:N];
+    hr = _g_xor(hr, hx, hy);
+    res[0:N] = hr;
+
+    hx = x[N : N];
+    hy = y[N : N];
+    hr = res[N:N];
+    hr = _g_xor(hr, hx, hy);
+    res[N:N] = hr;
+
+    return res;
+}
+
+inline
+fn rol_lane(
+    reg ptr Lt res,
+    reg ptr Lt x,
+    inline int a
+) -> reg ptr Lt
+{
+    #[spill] reg ptr Share rh rl xh xl;
+    rh = res[0 : N];
+    rl = res[N : N];
+    xh = x[0 : N];
+    xl = x[N : N];
+    #[inline] rh, rl = rol64(rh, rl, xh, xl, a);
+    res[0 : N] = rh;
+    res[N : N] = rl;
+    return res;
+}
+
+fn rol_lane_1(
+    reg ptr Lt res,
+    reg ptr Lt x
+) -> reg ptr Lt
+{
+    res = rol_lane(res, x, 1);
+    return res;
+}
+
+fn theta1600(
+    reg ptr At A
+) -> reg ptr At
+{
+    stack u32[5 * LANE_SIZE] C;
+
+    inline int x y;
+    for x = 0 to 5 {
+        reg ptr Lt cx axy;
+
+        axy = st_get_lane(A, x, 0);
+        C[x * LANE_SIZE : LANE_SIZE] = #copy(axy);
+        cx = C[x * LANE_SIZE : LANE_SIZE];
+
+        for y = 1 to 5 {
+            axy = st_get_lane(A, x, y);
+            #[inline] cx = xor_lanes_inplace(cx, axy);
+        }
+        C[x * LANE_SIZE : LANE_SIZE] = cx;
+    }
+
+    stack u32[LANE_SIZE] D;
+
+    for x = 0 to 5 {
+        reg ptr Lt dx cpl cpr;
+        dx = D;
+
+        cpr = C[(x+1)%5 * LANE_SIZE : LANE_SIZE];
+        dx = rol_lane_1(dx, cpr);
+
+        cpl = C[(x+4)%5 * LANE_SIZE : LANE_SIZE];
+        dx = xor_lanes_inplace(dx, cpl);
+
+        D = dx;
+
+        for y = 0 to 5 {
+            reg ptr Lt ap;
+            ap = st_get_lane(A, x, y);
+            #[inline] ap = xor_lanes_inplace(ap, dx);
+            A = st_put_lane(A, x, y, ap);
+        }
+    }
+
+    return A;
+}
+
+fn rho_pi1600(
+    reg ptr At A
+) -> reg ptr At
+{
+    stack u32[LANE_SIZE] buf0;
+    stack u32[LANE_SIZE] buf1;
+    inline int x y nx t;
+
+    reg ptr Lt init p;
+    init = st_get_lane(A, 1, 0);
+    p = buf0;
+    p = rol_lane_1(p, init);
+    buf0 = p;
+
+    x = 1; y = 0;
+    for t = 0 to 24 {
+        reg ptr Lt lane cur q;
+
+        nx = (2 * x + 3 * y) % 5;
+        x = y;
+        y = nx;
+
+        lane = st_get_lane(A, x, y);
+
+        if t % 2 == 0 {
+            q = buf1;
+            q = rol_lane(q, lane, (t + 2) * (t + 3) / 2);
+            buf1 = q;
+            cur = buf0;
+        } else {
+            q = buf0;
+            q = rol_lane(q, lane, (t + 2) * (t + 3) / 2);
+            buf0 = q;
+            cur = buf1;
+        }
+        lane = #copy(cur);
+        A = st_put_lane(A, x, y, lane);
+    }
+
+    return A;
+}
+
+fn chi1600(
+    reg ptr At A,
+    reg ptr u32[CHI_RANDOMNESS] rands
+) -> reg ptr At
+{
+    // A'[x,y] = A[x,y] ^ (~A[x+1,y] & A[x+2,y])
+    stack u32[5 * LANE_SIZE] row;
+    stack u32[N] not_buf;
+    stack u32[N] and_buf;
+    reg ptr Share nh ah bh ch;
+    reg ptr u32[AND_RANDOMNESS] rp;
+    inline int x y;
+    inline int rc = 0;
+
+    for y = 0 to 5 {
+        for x = 0 to 5 {
+            reg ptr Lt lane;
+            lane = st_get_lane(A, x, y);
+            row[x * LANE_SIZE : LANE_SIZE] = #copy(lane);
+        }
+
+        for x = 0 to 5 {
+            nh = not_buf;
+            ah = row[(x + 1) % 5 * LANE_SIZE     : N];
+            nh = _g_not(nh, ah);
+            not_buf = nh;
+
+            bh = row[(x + 2) % 5 * LANE_SIZE     : N];
+            ch = and_buf;
+            rp = rands[rc * AND_RANDOMNESS : AND_RANDOMNESS];
+            ch = _g_and(ch, nh, bh, rp);
+            and_buf = ch;
+            rc += 1;
+
+            ah = st_get_lane_hi(A, x, y);
+            ah = _g_xor_inplace(ah, ch);
+            A = st_put_lane_hi(A, x, y, ah);
+
+            nh = not_buf;
+            ah = row[(x + 1) % 5 * LANE_SIZE + N : N];
+            nh = _g_not(nh, ah);
+            not_buf = nh;
+
+            bh = row[(x + 2) % 5 * LANE_SIZE + N : N];
+            ch = and_buf;
+            rp = rands[rc * AND_RANDOMNESS : AND_RANDOMNESS];
+            ch = _g_and(ch, nh, bh, rp);
+            and_buf = ch;
+            rc += 1;
+
+            ah = st_get_lane_lo(A, x, y);
+            ah = _g_xor_inplace(ah, ch);
+            A = st_put_lane_lo(A, x, y, ah);
+        }
+    }
+
+    return A;
+}
+
+// High halves of round constants (bits 32..63 of each RC[r])
+u32[24] RC_HI = {
+    0x00000000, 0x00000000, 0x80000000, 0x80000000,
+    0x00000000, 0x00000000, 0x80000000, 0x80000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x80000000, 0x80000000, 0x80000000,
+    0x80000000, 0x80000000, 0x00000000, 0x80000000,
+    0x80000000, 0x80000000, 0x00000000, 0x80000000
+};
+
+// Low halves of round constants (bits 0..31 of each RC[r])
+u32[24] RC_LO = {
+    0x00000001, 0x00008082, 0x0000808A, 0x80008000,
+    0x0000808B, 0x80000001, 0x80008081, 0x00008009,
+    0x0000008A, 0x00000088, 0x80008009, 0x8000000A,
+    0x8000808B, 0x0000008B, 0x00008089, 0x00008003,
+    0x00008002, 0x00000080, 0x0000800A, 0x8000000A,
+    0x80008081, 0x00008080, 0x80000001, 0x80008008
+};
+
+fn iota1600(
+    reg ptr At A,
+    reg u32 round
+) -> reg ptr At
+{
+    reg ptr Share hi lo;
+    reg ptr u32[24] rcp;
+    reg u32 s rc;
+
+    // clamp round index for memory safety
+    reg u32 twenty_four = 24;
+    if (round > twenty_four) {
+        round = twenty_four;
+    }
+
+    hi = st_get_lane_hi(A, 0, 0);
+    s = hi[0];
+    rcp = RC_HI;
+    rc = rcp[round];
+    s ^= rc;
+    hi[0] = s;
+    A = st_put_lane_hi(A, 0, 0, hi);
+
+    lo = st_get_lane_lo(A, 0, 0);
+    s = lo[0];
+    rcp = RC_LO;
+    rc = rcp[round];
+    s ^= rc;
+    lo[0] = s;
+    A = st_put_lane_lo(A, 0, 0, lo);
+
+    return A;
+}
+
+fn rnd1600(
+    reg ptr At A,
+    reg u32 round,
+    reg ptr u32[CHI_RANDOMNESS] rands
+) -> reg ptr At
+{
+    A = theta1600(A);
+    A = rho_pi1600(A);
+    A = chi1600(A, rands);
+    A = iota1600(A, round);
+    return A;
+}
+
+fn keccakf1600(
+    reg ptr At A,
+    reg ptr u32[KECCAKF_RANDOMNESS] rands
+) -> reg ptr At
+{
+    #[spill] reg u32 round;
+    #[spill] reg ptr u32[CHI_RANDOMNESS] rp;
+    #[spill] reg u32 r = 0;
+    #[spill] reg u32 addr = 0;
+    while (r < 24) {
+        rp = rands.[addr : CHI_RANDOMNESS];
+
+        round = r;
+        #[inline] A = rnd1600(A, round, rp);
+        r += 1;
+        reg u32 inc = 4 * CHI_RANDOMNESS;
+        addr += inc;
+    }
+    return A;
+}

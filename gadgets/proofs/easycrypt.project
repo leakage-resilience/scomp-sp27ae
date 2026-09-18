@@ -1,0 +1,10 @@
+[general]
+timeout = 2
+# The path of Jasmin's EC lib is set in the nix devshell.
+# If you don't use the devshell, specify the path like this:
+#   idirs = Jasmin:/path/to/jasmin/eclib
+rdirs = .
+
+[test-all]
+args = -timeout 2 -max-provers 3 -p Z3 -p CVC4
+okdirs = .

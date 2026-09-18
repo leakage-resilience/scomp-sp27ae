@@ -1,0 +1,19 @@
+# Version control
+.git
+.gitignore
+
+# Build outputs (rebuilt inside the image)
+_build/
+**/_build/
+gadgets/benchmark/build/
+**/*.o
+**/*.elf
+**/*.bin
+
+# Editor/tooling cruft
+.direnv
+.vscode
+.venv
+**/__pycache__/
+**/.lia.cache
+.DS_Store

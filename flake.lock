@@ -1,0 +1,149 @@
+{
+  "nodes": {
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "flake-compat_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "jasmin-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1766051531,
+        "narHash": "sha256-ygd8ZtVDJPQQDYK+CU/pbaDLlGXHr0izmdkpfLGMn+4=",
+        "owner": "jasmin-lang",
+        "repo": "jasmin",
+        "rev": "a4a0681c7854c8be9720e0082997c07ca511d668",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jasmin-lang",
+        "ref": "inplace-annotation",
+        "repo": "jasmin",
+        "type": "github"
+      }
+    },
+    "maskverif-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1611826379,
+        "narHash": "sha256-oa80DO84K5bHG3ossE7lQFwbICheT2zfXdUsPuj8f98=",
+        "owner": "benjgregoire",
+        "repo": "maskverif",
+        "rev": "d25612bfe788c45affa4091f51a81634d14f1a17",
+        "type": "gitlab"
+      },
+      "original": {
+        "owner": "benjgregoire",
+        "ref": "SPINI",
+        "repo": "maskverif",
+        "type": "gitlab"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1720386169,
+        "narHash": "sha256-NGKVY4PjzwAa4upkGtAMz1npHGoRzWotlSnVlqI40mo=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "194846768975b7ad2c4988bdb82572c00222c0d7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "194846768975b7ad2c4988bdb82572c00222c0d7",
+        "type": "github"
+      }
+    },
+    "nixpkgs-unstable": {
+      "locked": {
+        "lastModified": 1771804684,
+        "narHash": "sha256-jB3cNIKVy+VUAR2R0HEPS+ipzPRlpGqQhXrhkXp5vgk=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3cbadb8d8db0495065347b709baab421139bf6f6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3cbadb8d8db0495065347b709baab421139bf6f6",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1771804684,
+        "narHash": "sha256-jB3cNIKVy+VUAR2R0HEPS+ipzPRlpGqQhXrhkXp5vgk=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3cbadb8d8db0495065347b709baab421139bf6f6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3cbadb8d8db0495065347b709baab421139bf6f6",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "jasmin-src": "jasmin-src",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "scverif": "scverif"
+      }
+    },
+    "scverif": {
+      "inputs": {
+        "flake-compat": "flake-compat_2",
+        "maskverif-src": "maskverif-src",
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1789672118,
+        "narHash": "sha256-oL+CyUPpWpo5rjEKiNd8CwmC4llqLUkSx7til+G0dO8=",
+        "owner": "leakage-resilience",
+        "repo": "scverif-pub",
+        "rev": "33d0068e22f0ad3c79731ad1807342936b9be120",
+        "type": "github"
+      },
+      "original": {
+        "owner": "leakage-resilience",
+        "repo": "scverif-pub",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

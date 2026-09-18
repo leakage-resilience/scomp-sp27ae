@@ -1,0 +1,384 @@
+require "constants.jinc"
+require "gadgets.jinc"
+require "keccak-f1600.jinc"
+
+type SHA3_224_Digest  = u32[7  * N];
+type SHA3_256_Digest  = u32[8  * N];
+type SHA3_384_Digest  = u32[12 * N];
+type SHA3_512_Digest  = u32[16 * N];
+type SHAKE128_Output  = u32[8  * N]; // 256-bit output
+type SHAKE256_Output  = u32[16 * N]; // 512-bit output
+
+inline
+fn keccak_init(
+    reg ptr At A
+) -> reg ptr At
+{
+    inline int i;
+    reg u32 zero;
+    zero = 0;
+    for i = 0 to 5 * 5 * LANE_SIZE {
+        A[i] = zero;
+    }
+    return A;
+}
+
+inline
+fn keccak_absorb(
+    inline int RATE_WORDS,
+    reg ptr At A,
+    reg u32 txt
+) -> (reg ptr At, reg u32)
+{
+    inline int i j;
+    #[spill] reg u32 val;
+    stack u32[N] share_buf;
+    #[spill] reg ptr Share shp ah;
+    stack u32[KECCAKF_RANDOMNESS] rands;
+    #[spill] reg ptr u32[KECCAKF_RANDOMNESS] randsp;
+
+    for i = 0 to RATE_WORDS {
+        shp = share_buf;
+        for j = 0 to N {
+            val = [:u32 txt + (i * N + j) * 4];
+            shp[j] = val;
+        }
+        share_buf = shp;
+        shp = share_buf;
+        if i % 2 == 0 {
+            ah = st_get_lane_lo(A, (i / 2) % 5, (i / 2) / 5);
+            ah = _g_xor_inplace(ah, shp);
+            A = st_put_lane_lo(A, (i / 2) % 5, (i / 2) / 5, ah);
+        } else {
+            ah = st_get_lane_hi(A, (i / 2) % 5, (i / 2) / 5);
+            ah = _g_xor_inplace(ah, shp);
+            A = st_put_lane_hi(A, (i / 2) % 5, (i / 2) / 5, ah);
+        }
+    }
+
+    txt += RATE_WORDS * N * 4;
+
+    randsp = rands;
+    randsp = #randombytes(randsp);
+    randsp = randsp; // unpin from r0
+    A = keccakf1600(A, randsp);
+
+    return (A, txt);
+}
+
+// Absorb the partial last block, apply SHA3 padding and permute. Caller squeezes.
+inline
+fn keccak_finalize(
+    inline int RATE_WORDS,
+    inline int DS,
+    reg ptr At A,
+    reg u32 txt,
+    reg u32 word_offset
+) -> reg ptr At
+{
+    #[spill] reg u32 w j n_val at_inner val s pad idx last_word;
+    stack u32[KECCAKF_RANDOMNESS] rands;
+    reg ptr u32[KECCAKF_RANDOMNESS] randsp;
+
+    // Absorb valid words from the last partial block
+    n_val = N;
+    w = 0;
+    while (w < RATE_WORDS) {
+        if (w < word_offset) {
+            at_inner = w;
+            at_inner ^= 1;
+            at_inner *= n_val;
+            j = 0;
+            while (j < N) {
+                val = [:u32 txt + 0];
+                s = A[at_inner];
+                s ^= val;
+                A[at_inner] = s;
+                txt += 4;
+                at_inner += 1;
+                j += 1;
+            }
+        }
+        w += 1;
+    }
+
+    // Padding. When word_offset == RATE_WORDS-1 we pad in the same word!
+    last_word = RATE_WORDS - 1;
+    if (word_offset == last_word) {
+        s = A[((RATE_WORDS - 1) ^ 1) * N];
+        pad = (0x80000000 | DS);
+        s ^= pad;
+        A[((RATE_WORDS - 1) ^ 1) * N] = s;
+    } else {
+        idx = word_offset;
+        idx ^= 1;
+        idx *= n_val;
+        s = A[idx];
+        pad = DS;
+        s ^= pad;
+        A[idx] = s;
+        s = A[((RATE_WORDS - 1) ^ 1) * N];
+        pad = 0x80000000;
+        s ^= pad;
+        A[((RATE_WORDS - 1) ^ 1) * N] = s;
+    }
+
+    // Final permutation
+    randsp = rands;
+    randsp = #randombytes(randsp);
+    randsp = randsp; // unpin from r0
+    A = keccakf1600(A, randsp);
+
+    return A;
+}
+
+// Init + absorb all full blocks + finalize. Returns permuted state. caller squeezes.
+inline
+fn keccak(
+    inline int RATE_WORDS,
+    inline int DS,
+    reg ptr At A,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr At
+{
+    #[spill] reg u32 remaining;
+
+    A = keccak_init(A);
+    remaining = len;
+
+    while (remaining >= RATE_WORDS) {
+        (A, txt) = keccak_absorb(RATE_WORDS, A, txt);
+        remaining -= RATE_WORDS;
+    }
+
+    A = keccak_finalize(RATE_WORDS, DS, A, txt, remaining);
+
+    return A;
+}
+
+inline
+fn sha3_224(
+    reg ptr SHA3_224_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_224_Digest
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(36, 0x06, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 7) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}
+
+inline
+fn sha3_256(
+    reg ptr SHA3_256_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_256_Digest
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(34, 0x06, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 8) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}
+
+inline
+fn sha3_384(
+    reg ptr SHA3_384_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_384_Digest
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(26, 0x06, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 12) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}
+
+inline
+fn sha3_512(
+    reg ptr SHA3_512_Digest output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHA3_512_Digest
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(18, 0x06, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 16) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}
+
+fn shake128(
+    reg ptr SHAKE128_Output output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHAKE128_Output
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(42, 0x1F, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 8) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}
+
+fn shake256(
+    reg ptr SHAKE256_Output output,
+    reg u32 txt,
+    reg u32 len
+) -> reg ptr SHAKE256_Output
+{
+    output = output;
+    txt = txt;
+    len = len;
+    stack At state;
+    reg ptr At statep;
+    #[spill] reg u32 i j n_val at_inner out_inner s;
+
+    statep = state;
+    statep = keccak(34, 0x1F, statep, txt, len);
+
+    n_val = N;
+    i = 0;
+    while (i < 16) {
+        at_inner = i;
+        at_inner ^= 1;
+        at_inner *= n_val;
+        out_inner = i;
+        out_inner *= n_val;
+        j = 0;
+        while (j < N) {
+            s = statep[at_inner];
+            output[out_inner] = s;
+            at_inner += 1;
+            out_inner += 1;
+            j += 1;
+        }
+        i += 1;
+    }
+    return output;
+}

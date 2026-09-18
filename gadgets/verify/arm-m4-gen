@@ -1,0 +1,225 @@
+#!/bin/sh
+set -eu
+
+N=$(( $ORDER + 1 ))
+PN=$ORDER
+RANDAND_MINUS_1=$(( $N * ($N - 1) / 2 - 1 ))
+
+cat << EOF
+
+annotate lm_xor
+    region mem w32 c[0:$ORDER]
+    region mem w32 a[0:$ORDER]
+    region mem w32 b[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [c 0]
+    init r1 [a 0]
+    init r2 [b 0]
+    init lr exit
+
+    input sharing a
+    input sharing b
+    input public c
+
+    output sharing c
+    ;
+
+annotate lm_xor_inplace
+    region mem w32 a[0:$ORDER]
+    region mem w32 b[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [a 0]
+    init r1 [b 0] 
+    init lr exit
+
+    input public r3
+    input public ip
+
+    input sharing a
+    input sharing b
+    output sharing a
+    ;
+
+annotate lm_not
+    region mem w32 x[0:$ORDER]
+    region mem w32 y[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [y 0]
+    init r1 [x 0] 
+    init lr exit
+
+    input public r2
+    input public r3
+
+    input public ip
+
+    input sharing x
+    output sharing y
+    ;
+
+annotate lm_not_inplace
+    region mem w32 x[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [x 0]
+    init lr exit
+
+    input public ip
+    input public r1
+    input public r2
+    input public r3
+
+    input sharing x
+    output sharing x
+    ;
+
+annotate lm_shl
+    region mem w32 x[0:$ORDER]
+    region mem w32 y[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [y 0]
+    init r1 [x 0]
+    init lr exit
+
+    input public r2
+    input public r3
+
+    input public ip
+    input public apsrc
+
+    input sharing x
+    output sharing y
+    ;
+
+annotate lm_shl_inplace
+    region mem w32 x[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [x 0]
+    init lr exit
+
+    input public r1
+    input public r3
+
+    input public ip
+    input public apsrc
+
+    input sharing x
+    output sharing x
+    ;
+
+annotate lm_shr
+    region mem w32 x[0:$ORDER]
+    region mem w32 y[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [y 0]
+    init r1 [x 0] 
+    init lr exit
+
+    input public r2
+    input public r3
+
+    input public ip
+    input public apsrc
+
+    input sharing x
+    output sharing y
+    ;
+
+annotate lm_shr_inplace
+    region mem w32 x[0:$ORDER]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [x 0]
+    init lr exit
+
+    input public r1
+    input public r3
+
+    input public ip
+    input public apsrc
+
+    input sharing x
+    output sharing x
+    ;
+
+annotate lm_rol64_1
+    region mem w32 res_hi[0:$ORDER]
+    region mem w32 res_lo[0:$ORDER]
+    region mem w32 x_hi[0:$ORDER]
+    region mem w32 x_lo[0:$ORDER]
+    region mem w32 stack[-4:0]
+
+    init sp [stack 0]
+    init r0 [res_hi 0]
+    init r1 [res_lo 0]
+    init r2 [x_hi 0]
+    init r3 [x_lo 0]
+    init lr exit
+
+    input public ip
+    input public apsrc
+
+    input sharing x_hi
+    input sharing x_lo
+    output sharing res_hi
+    output sharing res_lo
+    ;
+
+annotate lm_and_derand
+    region mem w32 c[0:$ORDER]
+    region mem w32 a[0:$ORDER]
+    region mem w32 b[0:$ORDER]
+    region mem w32 rnd[0:$RANDAND_MINUS_1]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [c 0]
+    init r1 [a 0]
+    init r2 [b 0] 
+    init r3 [rnd 0]
+    init lr exit
+
+    input public r3
+    input public apsrc
+
+    input sharing a
+    input sharing b
+    input urandom rnd
+    output sharing c
+    ;
+
+annotate lm_ref_derand
+    region mem w32 c[0:$ORDER]
+    region mem w32 a[0:$ORDER]
+    region mem w32 rnd[0:$RANDAND_MINUS_1]
+    region mem w32 stack[-1024:0]
+
+    init sp [stack 0]
+    init r0 [c 0]
+    init r1 [a 0]
+    init r2 [rnd 0]
+    init lr exit
+
+    input public r3
+    input public ip
+    input public apsrc
+
+    input sharing a
+    input urandom rnd
+    output sharing c
+    ;
+EOF

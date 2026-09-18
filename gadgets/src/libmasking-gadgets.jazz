@@ -1,0 +1,174 @@
+require "constants.jinc"
+require "gadgets.jinc"
+require "share.jinc"
+// require "libmasking-logref.jinc"
+
+export
+fn lm_share(
+    reg ptr u32[N] res,
+    reg u32 x
+) -> reg ptr u32[N]
+{
+    stack u32 [N-1] rand;
+    reg ptr u32 [N-1] randp = rand;
+
+    // jasmin2ec meeses up warray extraction of non-u8 #randombytes calls;
+    reg ptr u8[(N-1) * 4] randpB;
+    randpB = randp;
+    randpB = #randombytes(randpB);
+    randp = randpB;
+    #[inline] res = _g_share(res, x, randp);
+    return res;
+}
+
+export
+fn lm_and(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a b
+) -> reg ptr u32[N]
+{
+    stack u32 [AND_RANDOMNESS] rand;
+    reg ptr u32 [AND_RANDOMNESS] randp = rand;
+    // jasmin2ec meeses up warray extraction of non-u8 #randombytes calls;
+    reg ptr u8[AND_RANDOMNESS * 4] randpB;
+    randpB = randp;
+    randpB = #randombytes(randpB);
+    randp = randpB;
+    #[inline] c = _g_and(c, a, b, randp);
+    return c;
+}
+
+
+export
+fn lm_ref(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a
+) -> reg ptr u32[N]
+{
+    stack u32 [AND_RANDOMNESS] rand;
+    reg ptr u32 [AND_RANDOMNESS] randp = rand;
+    // jasmin2ec meeses up warray extraction of non-u8 #randombytes calls;
+    reg ptr u8[AND_RANDOMNESS * 4] randpB;
+    randpB = randp;
+    randpB = #randombytes(randpB);
+    randp = randpB;
+    #[inline] c = _g_ref(c, a, randp);
+    return c;
+}
+
+
+export
+fn lm_share_derand(
+    reg ptr u32[N] res,
+    reg u32 x,
+    reg ptr u32[N-1] randomness
+) -> reg ptr u32[N]
+{
+    #[inline] res = _g_share(res, x, randomness);
+    return res;
+}
+
+export
+fn lm_reconstruct(reg ptr u32[N] x) -> reg u32
+{
+    reg u32 res;
+    #[inline] res = _g_reconstruct(x);
+    return res;
+}
+
+export
+fn lm_get_order() -> reg u32
+{
+    reg u32 r;
+    r = ORDER;
+    return r;
+}
+
+export
+fn lm_xor(reg ptr u32[N] c a b) -> reg ptr u32[N]
+{
+    #[inline] c = _g_xor(c, a, b);
+    return c;
+}
+
+export
+fn lm_xor_inplace(reg ptr u32[N] a b) -> reg ptr u32[N]
+{
+    #[inline] a = _g_xor_inplace(a, b);
+    return a;
+}
+
+export
+fn lm_not(reg ptr u32[N] y x) -> reg ptr u32[N]
+{
+    #[inline] y = _g_not(y, x);
+    return y;
+}
+
+export
+fn lm_not_inplace(reg ptr u32[N] x) -> reg ptr u32[N]
+{
+    #[inline] x = _g_not_inplace(x);
+    return x;
+}
+
+
+export
+fn lm_shl(reg ptr u32[N] y x, reg u32 a) -> reg ptr u32[N]
+{
+    #[inline] y = _g_shl(y, x, a);
+    return y;
+}
+
+export
+fn lm_shl_inplace(reg ptr u32[N] x, reg u32 a) -> reg ptr u32[N]
+{
+    #[inline] x = _g_shl_inplace(x, a);
+    return x;
+}
+
+export
+fn lm_shr(reg ptr u32[N] y x, reg u32 a) -> reg ptr u32[N]
+{
+    #[inline] y = _g_shr(y, x, a);
+    return y;
+}
+
+export
+fn lm_shr_inplace(reg ptr u32[N] x, reg u32 a) -> reg ptr u32[N]
+{
+    #[inline] x = _g_shr_inplace(x, a);
+    return x;
+}
+
+export
+fn lm_and_derand(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a b,
+    reg ptr u32[AND_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    #[inline] c = _g_and(c, a, b, randomness);
+    return c;
+}
+
+export
+fn lm_ref_derand(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a,
+    reg ptr u32[AND_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    #[inline] c = _g_ref(c, a, randomness);
+    return c;
+}
+
+export
+fn lm_rol64_1(
+    reg ptr u32[N] res_hi res_lo,
+    reg ptr u32[N] x_hi x_lo
+) -> (reg ptr u32[N], reg ptr u32[N])
+{
+    #[inline] res_hi, res_lo = rol64_1(res_hi, res_lo, x_hi, x_lo);
+    return (res_hi, res_lo);
+}

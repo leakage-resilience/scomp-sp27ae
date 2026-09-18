@@ -1,0 +1,14 @@
+from libmasking_constants require "constants.jinc"
+
+// Expects ORDER, N, LOG_N from constants.jinc
+
+param int AND_RANDOMNESS = N*(N-1)/2;
+
+type Share = u32[N];
+
+// 5 cols * 5 rows * 2 halves = 50 AND gadgets per call
+param int CHI_RANDOMNESS = 50 * AND_RANDOMNESS;
+
+param int KECCAKF_RANDOMNESS = 24 * CHI_RANDOMNESS;
+
+param int LOG_REFRESH_RANDOMNESS = N * LOG_N;

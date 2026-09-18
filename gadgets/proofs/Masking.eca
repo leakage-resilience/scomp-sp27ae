@@ -1,0 +1,348 @@
+require import Core AllCore IntDiv CoreMap List Distr Int.
+from Jasmin require import JArray.
+from Jasmin require JWord.
+import JWord.W32.
+
+op order : { int | 0 <= order } as ge0_order.
+hint simplify ge0_order.
+
+
+
+type word = t.
+
+clone import PolyArray as P
+with
+  op size <- order + 1
+proof
+  ge0_size by smt(ge0_order).
+
+type sharing = word P.t.
+
+op rec_l (l : word list) = foldr (`^`) zero l.
+op rec (s : sharing) = rec_l (to_list s).
+op is_sharing (s : sharing) (x : word) = rec s = x.
+
+hint simplify size_map, size_zip, size_to_list, size_take, minzz.
+
+lemma rec_l_singleton : forall x, rec_l [x] = x by auto.
+lemma rec_l_nil : rec_l [] = zero by done.
+lemma rec_l_cons x xs : rec_l (x :: xs) = x `^` rec_l xs by rewrite/rec_l //=.
+lemma rec_l_conc (l l' : word list) : rec_l (l ++ l') = rec_l l `^` rec_l l'
+  by rewrite /rec_l; elim l l'; smt(xorwA).
+lemma rec_l_rcons (x : word) (l : word list) : rec_l (rcons l x) = rec_l l `^` x
+  by rewrite -cats1 rec_l_conc rec_l_singleton.
+lemma rec_l_perm (l l': word list) : perm_eq l l' => rec_l l = rec_l l'
+  by apply foldr_perm; smt(xorwA xorwC).
+lemma rec_l_takeS i s
+  : 0 <= i <= order => rec_l (take (i + 1) (to_list s)) = rec_l ((take i (to_list s))) `^` s.[i].
+proof. move=>h. rewrite -rec_l_rcons. congr.
+  rewrite -get_to_list -take_nth. smt(). reflexivity. qed.
+lemma rec_l_take1 s : rec_l (take 1 s) = nth zero s 0.
+  proof. case s. by exact rec_l_nil. progress. by rewrite take0 rec_l_singleton. qed.
+lemma map_to_list (f : word -> word) (s : sharing) : to_list (map f s) = map f (to_list s)
+  by apply (eq_from_nth witness) => //= ??; rewrite (nth_map witness) ?mapiE //=.
+
+hint simplify rec_l_singleton, rec_l_nil, rec_l_cons, rec_l_conc, rec_l_rcons.
+
+op unary_correct (s : word -> word) (f : sharing -> sharing)
+  = forall x, s (rec x) = rec (f x).
+
+op binary_correct (s : word -> word -> word) (f : sharing -> sharing -> sharing)
+  = forall a b, s (rec a) (rec b) = rec (f a b).
+
+(* I don't know why but ec does not find the instance *)
+instance bring with word
+  op rzero = zerow
+  op rone  = onew
+  op add   = (+^)
+  op mul   = andw
+  op opp   = oppw
+
+  proof oner_neq0 by apply/onew_neq0
+  proof addr0     by apply/xorw0
+  proof addrA     by (move=> w1 w2 w3; rewrite xorwA)
+  proof addrC     by apply/xorwC
+  proof addrK     by apply/xorwK
+  proof mulr1     by apply andw1
+  proof mulrA     by (move=> w1 w2 w3; rewrite andwA)
+  proof mulrC     by apply/andwC
+  proof mulrDl    by apply/andwDl
+  proof mulrK     by apply/andwK
+  proof oppr_id   by trivial.
+
+
+
+
+op linear (f : word -> word) = forall a b, f a `^` f b = f (a `^` b).
+
+lemma linear_elementwise_list f:
+    linear f => forall l, 0 < size l => rec_l (map f l) = f (rec_l l).
+proof.
+  move=>h [//|] x xs _.
+  elim: xs =>// x' xs //=.
+  rewrite -!h xorwA (xorwC (f x) (f x')) -xorwA =>->.
+  rewrite xorwA (xorwC (f x') (f x)) xorwA.
+  reflexivity.
+qed.
+
+lemma linear_elementwise f :
+    linear f => unary_correct f (map f).
+proof.
+  move=>h x.
+  rewrite /rec -(linear_elementwise_list f h).
+  smt(size_to_list ge0_order).
+  congr.
+  rewrite /to_lit map_mkseq /(\o) //=.
+  apply eq_in_mkseq=> i ih //=.
+  by rewrite (mapiE _ _ _ ih).
+qed.
+
+lemma xor_lin_get i a b :
+  0 <= i => i <= order => (map2 (`^`) a b).[i] = a.[i] `^` b.[i].
+proof.
+  move => *.
+  apply map2iE.
+  smt().
+qed.
+
+op xor_c : (word * word) -> word = fun x => x.`1 `^` x.`2.
+op xor_el x y = map xor_c (zip x y).
+
+lemma rec_l_linear:
+  forall (x y : word list),
+    size x = size y
+    => rec_l (xor_el x y) = rec_l x `^` rec_l y.
+proof.
+  rewrite /xor_el.
+  apply seq2_ind. trivial.
+  move=> x y xs ys //= ->.
+  rewrite /xor_c //=. ring.
+qed.
+
+lemma rec_linear (a b c: sharing)
+    : (forall i, 0 <= i => i <= order => c.[i] = a.[i] `^` b.[i])
+    => rec a `^` rec b = rec c.
+proof.
+  move => H.
+  rewrite /rec. rewrite -rec_l_linear /xor_el //.
+  congr.
+  apply (eq_from_nth witness).
+  rewrite size_map size_zip !size_to_list //.
+  move => x //= hx.
+  rewrite (nth_map (witness, witness)) /xor_c //= !nth_zip //= eq_sym.
+  apply H; smt().
+qed.
+
+lemma xor_elementwise : binary_correct (`^`) (map2 (`^`)).
+proof.
+  move=> x s.
+  rewrite /rec.
+  apply rec_linear.
+  move=>i ihl ihr.
+  rewrite map2iE. smt().
+  reflexivity.
+qed.
+
+
+op crossterm (r: int -> int -> word) (a b : sharing) (i' : int)
+  = (a.[i'] `&` b.[i'])
+    `^` rec_l (map (r i') (range (i'+1) (order + 1)))
+    `^` rec_l (map (fun j' => (a.[i'] `&` b.[j']) `^` (a.[j'] `&` b.[i']) `^` r j' i') (range 0 i')).
+
+
+op isw_and_crossterms (c a b : sharing)
+  = exists r, forall i', 0 <= i' <= order =>
+          c.[i'] = crossterm r a b i'.
+
+
+op crossterm' (r: int -> int -> word) (a b: sharing) (i': int)
+  = (a.[i'] `&` b.[i'])
+    `^` rec_l (map (r i') (range (i'+1) (order + 1)))
+    `^` rec_l (map (fun j' => r j' i') (range 0 i'))
+    `^` rec_l (map (fun j' => (a.[i'] `&` b.[j']) `^` (a.[j'] `&` b.[i'])) (range 0 i')).
+
+op r_ji r (a b: sharing) i j = r i j `^` (a.[i] `&` b.[j]) `^` (a.[j] `&` b.[i]).
+
+lemma crossterm_rewrite
+  : forall r a b, crossterm r a b = crossterm' r a b.
+proof.
+  move => r a b.
+  rewrite fun_ext /(==) => i.
+  rewrite /crossterm /crossterm' =>/>.
+  suff -> : rec_l (map (fun j' => (a.[i] `&` b.[j']) `^` (a.[j'] `&` b.[i]) `^` r j' i) (range 0 i))
+       = rec_l (map (fun j => r j i) (range 0 i))
+         `^` rec_l (map (fun j' => (a.[i] `&` b.[j']) `^` (a.[j'] `&` b.[i])) (range 0 i))
+    by rewrite -!xorwA.
+  rewrite -rec_l_linear /xor_el /xor_c.
+  + by rewrite !size_map !size_range.
+  congr.
+  rewrite zip_map -map_comp zipss /(\o) => />.
+  apply (eq_from_nth witness).
+  + by rewrite !size_map.
+  move=> i' //= i'B.
+  rewrite !(nth_map witness witness) //=.
+  ring.
+qed.
+
+lemma crossterm_seq r a b o
+    : 0 <= o => mkseq (crossterm r a b) (o + 1)
+    = map (fun x: (word * word) => x.`1 `^` x.`2) (zip
+      (mkseq
+        (fun i' =>
+          rec_l (map (r i') (range (i'+1) (order + 1)))
+          `^` rec_l (map (fun j => r j i') (range 0 i')))
+        (o + 1))
+      (mkseq
+        (fun i' =>
+          (a.[i'] `&` b.[i'])
+          `^` rec_l (map (fun j' => (a.[i'] `&` b.[j']) `^` (a.[j'] `&` b.[i'])) (range 0 i')))
+        (o + 1))).
+proof.
+  move=>opos.
+  apply (eq_from_nth witness).
+  rewrite /mkseq !size_map !size_zip //.
+  move=> i iB />.
+  rewrite size_map size_iota lez_maxr in iB.
+  + smt().
+
+  rewrite (nth_map witness witness).
+  + rewrite size_iota lez_maxr; smt().
+  rewrite nth_iota //=.
+  rewrite (nth_map (witness, witness)).
+  + rewrite size_zip !size_map !size_iota lez_minr //= lez_maxr; smt().
+  rewrite  (nth_zip witness witness).
+  + by rewrite !size_map.
+  rewrite !(nth_map witness)
+    ; first 2 rewrite size_iota #smt:().
+  rewrite !(nth_iota) //=.
+  rewrite crossterm_rewrite /crossterm' #ring.
+qed.
+
+lemma and_crossterms (a b : word list)
+  : rec_l a `&` rec_l b = rec_l (allpairs (`&`) a b).
+proof.
+  move: a.
+  apply last_ind.
+  + rewrite /= allpairs0l //.
+  move=> sa xa //= iH.
+  rewrite andwDl iH.
+
+  suff -> : rec_l (allpairs (`&`) (rcons sa xa) b) = rec_l (allpairs (`&`) (xa::sa) b).
+  - rewrite allpairs_consl rec_l_conc #ring.
+    clear iH.
+    elim b; first by ring.
+    move=> x l ih //=. ring ih.
+
+  apply rec_l_perm.
+  apply perm_eq_allpairs.
+  rewrite -cats1 perm_eq_sym -cat1s perm_catC.
+  exact perm_eq_refl.
+qed.
+
+lemma isw_and_randomness_cancles (r : int -> int -> word) :
+    rec_l (mkseq (fun (i' : int) =>
+      rec_l (map (r i') (range (i' + 1) (order + 1))) `^`
+      rec_l (map (fun j => r j i') (range 0 i'))
+    ) (order + 1)) = zero.
+proof.
+  move: order ge0_order.
+  apply intind.
+  + by rewrite //= mkseq1 //= !range_geq.
+
+  simplify.
+  move => order orderB iH //>.
+  have !-> : order + 2 = order + 1 + 1 by trivial.
+  rewrite mkseqS.
+  + smt().
+
+  rewrite rec_l_rcons //= range_geq //=.
+  ring.
+
+  suff -> : rec_l
+    (mkseq
+      (fun (i' : int) =>
+        rec_l (map (r i') (range (i' + 1) (order + 2))) `^`
+        rec_l (map (fun j => r j i') (range 0 i'))) (order + 1))
+    = rec_l
+      (mkseq
+        (fun (i' : int) =>
+          rec_l (map (r i') (range (i' + 1) (order + 1))) `^`
+          rec_l (map (fun j => r j i') (range 0 i'))) (order + 1)) `^`
+      rec_l (mkseq (fun i => r i (order + 1)) (order + 1))
+  by rewrite iH xorwK_s //=.
+  clear iH.
+
+  rewrite -rec_l_linear.
+  + by rewrite !size_mkseq.
+
+  rewrite /xor_el /xor_c zip_map.
+  congr.
+  apply (eq_from_nth witness).
+  + smt(size_mkseq size_map size_zip).
+
+  move => i iB.
+  rewrite size_mkseq lez_maxr in iB.
+  + smt().
+
+  rewrite nth_mkseq //=.
+  rewrite !(nth_map (witness, witness)) //=
+      ; first 2 rewrite size_iota #smt:().
+
+  rewrite !(nth_zip witness) //=.
+  rewrite !nth_iota //=.
+  ring. rewrite /zerow.
+
+  have -> : order + 2 = order + 1 + 1 by done.
+  rewrite xorwK_s 2:/zerow //.
+  rewrite eq_sym rangeSr 1:#smt:() map_rcons rec_l_rcons.
+  ring.
+qed.
+
+lemma isw_and_correct (c a b : sharing)
+    : isw_and_crossterms c a b
+    => rec c = rec a `&` rec b.
+proof.
+  rewrite /rec.
+  move => [r H].
+
+  have -> : (to_list c) = (mkseq (crossterm r a b) (order + 1)).
+  + apply (eq_from_nth witness); rewrite !size_mkseq // => *.
+    rewrite !nth_mkseq #smt:().
+  clear H.
+
+  rewrite crossterm_seq // rec_l_linear 1:!size_mkseq //= isw_and_randomness_cancles //= /to_list.
+
+  move : order ge0_order.
+  apply intind => //=.
+  + rewrite !mkseq1 //= range_geq //.
+
+  move=> i iB //=.
+  rewrite !(mkseqS _ (i + 1)); first 3 smt().
+  rewrite //= rangeSr // map_rcons rec_l_rcons !mkseqS // !rec_l_rcons.
+  move=> ->.
+  ring.
+
+  have -> : (map (fun (j' : int) => (a.[i + 1] `&` b.[j']) `^` (a.[j'] `&` b.[i + 1])) (range 0 i))
+    = (map xor_c (zip (mkseq (fun j' => a.[i + 1] `&` b.[j']) i) (mkseq (fun j' => a.[j'] `&` b.[i + 1]) i))).
+  + apply (eq_from_nth witness). rewrite !size_map size_zip !size_mkseq size_range #smt:().
+    move=> el //=. rewrite size_range =>//= hel.
+    rewrite (nth_map witness) // 1:size_range //.
+    rewrite (nth_map (witness, witness)) 1:size_zip 1:!size_mkseq //.
+    rewrite /xor_c nth_range //=. smt().
+    rewrite nth_zip 1:!size_mkseq // !nth_mkseq //=; first 2 smt().
+
+  rewrite rec_l_linear 1:!size_mkseq//=.
+  ring.
+
+  case (i = 0); first by move=>->; rewrite !mkseq0 //.
+  move=>ipos.
+
+  have scale_lin : forall x, linear ((`&`) x) by move=>*; ring.
+  rewrite -(linear_elementwise_list _ (scale_lin b.[i+1])) 1:size_mkseq. smt().
+  rewrite -(linear_elementwise_list _ (scale_lin a.[i+1])) 1:size_mkseq. smt().
+
+  rewrite !map_mkseq /(\o). ring.
+  suff -> : (fun (x : int) => b.[i + 1] `&` a.[x]) =  (fun (j' : int) => a.[j'] `&` b.[i + 1])
+    by ring.
+  apply fun_ext=>?. ring.
+qed.

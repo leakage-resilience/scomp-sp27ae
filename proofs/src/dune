@@ -1,0 +1,13 @@
+(coq.theory
+ (name PMpreservation)
+ (theories mathcomp.ssreflect)
+ (flags
+   :standard
+   -w "-notation-overridden"
+   -w "-extraction-reserved-identifier"
+   -w "+deprecated-hint-without-locality"
+   -w "+deprecated-hint-rewrite-without-locality"
+   -w "+deprecated-instance-without-locality"
+   -w "-hiding-delimiting-key"
+   -w "-opaque-let"
+))

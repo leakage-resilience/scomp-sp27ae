@@ -1,0 +1,256 @@
+require "constants.jinc"
+
+from libmasking_arch require "shift.jinc"
+
+fn _g_xor(reg ptr u32[N] c a b) -> reg ptr u32[N]
+{
+    a = a;
+    b = b;
+    c = c;
+
+    inline int i;
+    reg u32 x y;
+    for i = 0 to N {
+        x = a[i];
+        y = b[i];
+        #[inplace] x = x ^ y;
+        c[i] = x;
+
+        #[keep, inplace] _ = x ^ x;
+        #[keep, inplace] _ = y ^ y;
+    }
+
+    return c;
+}
+
+fn _g_xor_inplace(reg ptr u32[N] a b) -> reg ptr u32[N]
+{
+    a = a;
+    b = b;
+
+    inline int i;
+    reg u32 x y;
+
+    for i = 0 to N {
+        x = a[i];
+        y = b[i];
+        #[inplace] x = x ^ y;
+        a[i] = x;
+
+        #[keep, inplace] _ = x ^ x;
+        #[keep, inplace] _ = y ^ y;
+    }
+    return a;
+}
+
+fn _g_not(reg ptr u32[N] y x) -> reg ptr u32[N]
+{
+    y = y;
+    x = x;
+
+    inline int i;
+    reg u32 s;
+
+
+    s = x[0];
+    #[inplace] s = s ^ -1;
+    y[0] = s;
+    #[keep, inplace] _ = s ^ s;
+
+    for i = 1 to N {
+        s = x[i];
+        y[i] = s;
+        #[keep, inplace] _ = s ^ s;
+    }
+
+    return y;
+}
+
+fn _g_not_inplace(reg ptr u32[N] x) -> reg ptr u32[N]
+{
+    x = x;
+    reg u32 s;
+    s = x[0];
+
+    #[inplace] s = s ^ -1;
+    x[0] = s;
+    #[inplace, keep] _ = s ^ s;
+
+    return x;
+}
+
+// rotate left by a constant
+inline
+fn _g_rolC(reg ptr u32[N] y x, inline int a) -> reg ptr u32[N]
+{
+    inline int i;
+    reg u32 s;
+    for i = 0 to N {
+        s = x[i];
+        #[inplace] s = s <<r a;
+        y[i] = s;
+        #[inplace, keep] s = s ^ s;
+    }
+    // clear flags
+    #[inplace, keep] _ = s <<r a;
+    return y;
+}
+
+// rotate-left a masked 64-bit word by a constant.
+// Uses a lot of regs, so we spill pointers.
+inline
+fn rol64(
+    #[spill] reg ptr u32[N] res_hi res_lo,
+    #[spill] reg ptr u32[N] x_hi x_lo,
+    inline int a
+) -> (reg ptr u32[N], reg ptr u32[N])
+{
+    inline int b = a % 64;
+    inline int shift = b % 32;
+    inline int i;
+    reg u32 lo hi umsb lmsb tmp;
+
+    for i = 0 to N {
+        lo = x_hi[i];
+        hi = x_lo[i];
+
+        if b > 32 {
+            tmp = lo;
+            lo = hi;
+            hi = tmp;
+            #[keep, inplace] _ = tmp ^ tmp;
+        }
+
+        umsb = hi;
+        #[inplace] umsb = umsb >> (32 - shift);
+        lmsb = lo;
+        #[inplace] lmsb = lmsb >> (32 - shift);
+
+        #[inplace] hi = hi << shift;
+        #[inplace] lo = lo << shift;
+
+        #[inplace] hi = hi ^ lmsb;
+        #[keep, inplace] _ = lmsb ^ lmsb;
+        #[inplace] lo = lo ^ umsb;
+        #[keep, inplace] _ = umsb ^ umsb;
+
+        res_hi[i] = lo;
+        res_lo[i] = hi;
+        #[keep, inplace] _ = lo ^ lo;
+        // keep hi alive for clear later
+        #[keep, inplace] hi = hi ^ hi;
+    }
+
+    // clear apsrc
+    #[keep, inplace] _ = hi << 1;
+
+    return (res_hi, res_lo);
+}
+
+fn rol64_1(
+    reg ptr u32[N] res_hi res_lo,
+    reg ptr u32[N] x_hi x_lo
+) -> (reg ptr u32[N], reg ptr u32[N])
+{
+    res_hi, res_lo = rol64(res_hi, res_lo, x_hi, x_lo, 1);
+    return (res_hi, res_lo);
+}
+
+
+// we could reduce the number of erases if we could guarantee that variables
+// are always placed in the same register, i.e. with `merge`:
+//      x = c[i]
+//      ...
+//      x = #merge(x, c[j])
+// This allows us to remove erases if we know c[i] ^ c[j] can be leaked.
+// I tried #[inplace] x = x*0 + c[j] but that does not work
+fn _g_and(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a b,
+    reg ptr u32[AND_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    c = c;
+    a = a;
+    b = b;
+
+    inline int i;
+    inline int j;
+
+    inline int rand_counter = 0;
+
+    reg u32 x y z rand;
+
+    for i = 0 to N {
+        x = a[i];
+        y = b[i];
+        #[inplace] x = x & y;
+        c[i] = x;
+
+        #[inplace, keep] _ = x ^ x;
+        #[inplace, keep] _ = y ^ y;
+    }
+
+    for i = 0 to N {
+        for j = i+1 to N {
+            rand = randomness[#unaligned rand_counter];
+            rand_counter += 1;
+            x = c[i];
+            #[inplace] x = x ^ rand;
+            c[i] = x; // c[i] += rand
+            #[inplace, keep] _ = x ^ x;
+
+            // x = a_i*b_j + r
+            x = a[i];
+            y = b[j];
+            #[inplace] x = x & y;
+            #[inplace] x = x ^ rand;
+
+            #[inplace, keep] _ = rand ^ rand;
+            #[inplace, keep] _ = y ^ y;
+
+            // y = a_j*b_i            
+            y = a[j];
+            z = b[i];
+            #[inplace] y = y & z;
+            #[inplace, keep] _ = z ^ z;
+
+            // x = a_i*b_j + a_j*b_i + r
+            #[inplace] x = x ^ y;
+            
+            #[inplace, keep] y = y ^ y;
+            y = c[j];
+            #[inplace] x = x ^ y;
+            #[inplace, keep] _ = y ^ y;
+
+            c[j] = x;
+            #[inplace, keep] _ = x ^ x;
+        }
+    }
+
+    c = c;
+    return c;
+}
+
+fn _g_ref(
+    reg ptr u32[N] c,
+    reg ptr u32[N] a,
+    reg ptr u32[AND_RANDOMNESS] randomness
+) -> reg ptr u32[N]
+{
+    // TODO: better refresh
+    stack u32 [N] one;
+    reg ptr u32[N] onep;
+    reg u32 x;
+    
+    x = -1;
+    one[0] = x;
+    x = 0;
+    inline int i;
+    for i = 1 to N {
+        one[i] = x;
+    }
+    onep = one;
+    #[inline] c = _g_and(c, a, onep, randomness);
+    return c;
+}

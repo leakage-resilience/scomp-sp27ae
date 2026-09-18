@@ -1,0 +1,35 @@
+require "constants.jinc"
+
+inline
+fn _g_share(
+    reg ptr u32[N] res,
+    reg u32 x,
+    reg ptr u32[N-1] randomness
+) -> reg ptr u32[N]
+{
+    reg u32 r;
+    x = x;
+    inline int i;
+    for i = 0 to N - 1 {
+        r = randomness[i];
+        res[i] = r;
+        x ^= r;
+    }
+    res[N-1] = x;
+    return res;
+}
+
+inline
+fn _g_reconstruct(
+    reg ptr u32[N] x
+) -> reg u32
+{
+    reg u32 s a;
+    s = x[0];
+    inline int i;
+    for i = 1 to N {
+        a = x[i];
+        s ^= a;
+    }
+    return s;
+}

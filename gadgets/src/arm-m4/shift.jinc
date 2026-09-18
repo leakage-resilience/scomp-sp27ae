@@ -1,0 +1,60 @@
+
+fn _g_shl(reg ptr u32[N] y x, reg u32 a) -> reg ptr u32[N]
+{
+    inline int i;
+    reg u32 s;
+    for i = 0 to N {
+        s = x[i];
+        #[inplace] s = s << a;
+        y[i] = s;
+        #[inplace, keep] s = s ^ s;
+    }
+    // clear flags
+    #[inplace, keep] _ = s << a;
+    return y;
+}
+
+fn _g_shl_inplace(reg ptr u32[N] x, reg u32 a) -> reg ptr u32[N]
+{
+    inline int i;
+    reg u32 s;
+    for i = 0 to N {
+        s = x[i];
+        #[inplace] s = s << a;
+        x[i] = s;
+        #[inplace, keep] s = s ^ s;
+    }
+    // clear flags
+    #[inplace, keep] _ = s << a;
+    return x;
+}
+
+fn _g_shr(reg ptr u32[N] y x, reg u32 a) -> reg ptr u32[N]
+{
+    inline int i;
+    reg u32 s;
+    for i = 0 to N {
+        s = x[i];
+        #[inplace] s = s >> a;
+        y[i] = s;
+        #[inplace, keep] s = s ^ s;
+    }
+    // clear flags
+    #[inplace, keep] _ = s >> a;
+    return y;
+}
+
+fn _g_shr_inplace(reg ptr u32[N] x, reg u32 a) -> reg ptr u32[N]
+{
+    inline int i;
+    reg u32 s;
+    for i = 0 to N {
+        s = x[i];
+        #[inplace] s = s >> a;
+        x[i] = s;
+        #[inplace, keep] s = s ^ s;
+    }
+    // clear flags
+    #[inplace, keep] _ = s >> a;
+    return x;
+}

@@ -1,0 +1,41 @@
+# Virtual environment
+.venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/*
+
+**/*.log
+**/*.stdout
+**/*.stderr
+
+# Jasmin and easyCrypt
+*.o
+*.jazz.s
+*.elf
+*.bin
+src/constants.jinc
+.direnv
+**/_build/
+.DS_Store
+*.v.crashcoqide
+\#*\#
+**/node_modules/**
+src/*.ec
+old_unrelated_reference_paper
+
+# Rocq
+**/.lia.cache
+
+gadgets/benchmark/build
+gadgets/benchmark/counterexample/*.o
+gadgets/benchmark/counterexample/*.lst
+
+*.eco
