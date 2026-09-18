@@ -12,7 +12,7 @@
       url = "github:jasmin-lang/jasmin?ref=inplace-annotation";
       flake = false;
     };
-    scverif.url = "github:leakage-resilience/scverif-pub";
+    scverif.url = "github:leakage-resilience/scverif/scverif-2.0.0";
   };
 
   outputs =

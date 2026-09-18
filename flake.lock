@@ -130,16 +130,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1789672118,
-        "narHash": "sha256-oL+CyUPpWpo5rjEKiNd8CwmC4llqLUkSx7til+G0dO8=",
+        "lastModified": 1789772846,
+        "narHash": "sha256-iFwgW/d+2tiy/UuBUjn193sfTIHca+16Vmm5G/vH2lI=",
         "owner": "leakage-resilience",
-        "repo": "scverif-pub",
-        "rev": "33d0068e22f0ad3c79731ad1807342936b9be120",
+        "repo": "scverif",
+        "rev": "4f9b1480f751fa4e8ed2cc9c4dd69fb692551ca3",
         "type": "github"
       },
       "original": {
         "owner": "leakage-resilience",
-        "repo": "scverif-pub",
+        "ref": "scverif-2.0.0",
+        "repo": "scverif",
         "type": "github"
       }
     }

@@ -67,7 +67,7 @@ docker run -it scomp     # This will drop you into a shell with all dependencies
 - cmake version 4.1.2
 - ninja version 1.13.2
 - Jasmin on the `inplace-annotation` branch
-- scVerif on `33d0068e`
+- scVerif 2.0.0
 
 ## Proofs
 
