@@ -4,7 +4,7 @@
 set -eu
 
 echo "Cleaning stray build files for clean build"
-rm -r _build
+rm -rf _build
 
 echo "Checking wether the gadgets compile for supported configurations..."
 echo "This will take up to a minute"
