@@ -39,7 +39,9 @@ x86-64 Linux.
 nix --experimental-features "nix-command flakes" develop .#default
 ```
 
-All commands below assume you are inside the devshell.
+All commands below assume you are inside the devshell. There are scripts that 
+show how to reproduce our core claims (`claim1-proofs.sh`, `claim2-gadgets.sh`,
+`claim3-counterexamples.sh`).
 
 ### Reproducing with Docker
 
